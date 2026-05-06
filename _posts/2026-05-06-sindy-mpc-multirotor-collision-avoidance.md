@@ -1,0 +1,211 @@
+---
+title: "SINDy + MPC로 멀티로터 충돌 회피하기 — 데이터 기반 모델 식별이 만난 예측 제어"
+date: 2026-05-06 14:00:00 +0900
+categories: [Paper Notes, Control]
+tags: [sindy, mpc, multirotor, system-identification, data-driven, collision-avoidance]
+math: true
+mermaid: true
+image:
+  path: https://upload.wikimedia.org/wikipedia/commons/0/02/UAV-Multirotor.svg
+  alt: Multirotor UAV schematic (Wikimedia Commons, CC0)
+---
+
+> **Paper**: Lee et al., *Sparse Identification of Nonlinear Dynamics‐Based Model Predictive Control for Multirotor Collision Avoidance*, **IET Control Theory & Applications**, 2025.
+> DOI: [10.1049/cth2.70049](https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/cth2.70049) · arXiv: [2412.06388](https://arxiv.org/abs/2412.06388)
+
+## 들어가며
+
+드론(멀티로터)에 페이로드를 매달면 어떻게 될까요? 질량과 관성이 바뀌고, 공기역학적 외란까지 추가됩니다. 모델은 부정확해지고, 제어기는 갑자기 흔들리기 시작합니다. 이런 상황에서도 **궤적을 따라가면서 동시에 장애물을 피해야 한다면**, 어떻게 해야 할까요?
+
+오늘 소개할 논문은 이 문제를 **데이터 기반 시스템 식별 + 모델 예측 제어(MPC)** 로 푸는 흥미로운 접근을 보여줍니다. 핵심은 **SINDy(Sparse Identification of Nonlinear Dynamics)** 입니다.
+
+## 왜 SINDy인가?
+
+데이터로 모델을 학습하는 방법은 많습니다. 신경망(DNN), 가우시안 프로세스(GP) 등이 대표적이죠. 그런데 이 방법들은 모두 **블랙박스**입니다. 모델이 왜 그런 출력을 내는지, 물리적으로 어떤 의미인지 설명하기가 어렵습니다.
+
+**SINDy는 다릅니다.**
+
+- "시스템을 지배하는 방정식은 사실 몇 개의 항으로 충분히 표현된다"는 가정에서 출발합니다.
+- 후보 함수 라이브러리 $\Psi$ 에서 **희소(sparse) 계수**만 골라내어, 사람이 읽을 수 있는 ODE 형태의 모델을 만듭니다.
+- 적은 데이터로도 작동하고, 결과가 **물리적으로 해석 가능**합니다.
+
+이 점이 안전이 중요한 멀티로터 제어에서 큰 장점이 됩니다.
+
+## 전체 파이프라인 한눈에 보기
+
+```mermaid
+flowchart LR
+    A[Baseline PID<br/>controller] -->|sample trajectories| B[State + input<br/>data X, U, Ẋ]
+    B --> C[Library Ψ X,U<br/>physics priors + polynomials]
+    C --> D[Sparse regression<br/>L1 reg]
+    D --> E[Identified model<br/>ẋ = f̂ x,u]
+    E --> F[SINDy-MPC<br/>tracking + collision avoidance]
+    F --> G[Multirotor closed-loop]
+    G -.->|new data| B
+```
+
+## 시스템 모델: 페이로드를 단 멀티로터
+
+논문에서 다루는 6-DOF 동역학은 다음과 같습니다.
+
+$$
+\dot{\eta} = \nu, \qquad
+\dot{\nu} = \tfrac{1}{m_t}(R_{BI} f_t + f_a) - g
+$$
+
+$$
+\dot{\Omega} = R_\omega \omega, \qquad
+\dot{\omega} = I_t^{-1}\left(\tau_t + \tau_a - \omega \times I_t \omega \right)
+$$
+
+여기서 핵심은 **페이로드 때문에 질량/관성이 바뀐다**는 점입니다.
+
+- $m_t = m_m + m_p$
+- $I_t = I_m + I_p$
+
+추가로 공기역학 효과를 선형 감쇠로 모델링합니다.
+
+- $f_a = [-K_F \dot{x},\ -K_F \dot{y},\ -K_F \dot{z}]^\top$
+- $\tau_a = [-K_{M,p}\, p,\ -K_{M,q}\, q,\ -K_{M,r}\, r]^\top$
+
+**문제는?** $m_p, I_p, K_F, K_M$ 모두 정확히 모릅니다. 그래서 **데이터로 알아내야** 합니다.
+
+![Quadrotor pitch axis](https://upload.wikimedia.org/wikipedia/commons/2/22/Quadrotorpitch.svg){: width="320" }
+_Quadrotor pitch 동작 모식도 (Wikimedia Commons, CC BY-SA 3.0)_
+
+## SINDy의 핵심 아이디어
+
+상태 스냅샷 $X$ 와 그 미분 $\dot X$ 를 모은 뒤, 후보 함수 라이브러리 $\Psi(X,U)$ 로 회귀합니다.
+
+$$
+\dot X = \Psi(X,U)\, \Sigma
+$$
+
+여기서 계수 $\Sigma$ 를 **L1 정칙화**로 희소하게 만듭니다.
+
+$$
+\Sigma^\star = \arg\min_\Sigma \, \| \dot X - \Psi(X,U)\Sigma \|_2^2 + \lambda \|\Sigma\|_1
+$$
+
+$\lambda$ 가 클수록 거의 0인 항이 잘려나가고, 결국 진짜 의미 있는 항만 남습니다.
+
+### 후보 라이브러리에 물리 지식 주입
+
+논문이 영리한 점은 **사전 지식을 라이브러리에 함께 넣어준다**는 것입니다.
+
+$$
+\Psi_{\text{tr}} = \big[\,\Psi_{\text{prior}}(\text{thrust, gravity}) \;\big|\; \Psi_{\text{poly}}(\text{velocity polynomials})\,\big]
+$$
+
+$$
+\Psi_{\text{ro}} = \big[\,\Psi_{\text{prior}}(\text{control input, rotational coupling}) \;\big|\; \Psi_{\text{poly}}(\text{angular-rate polynomials})\,\big]
+$$
+
+이렇게 하면 데이터가 적어도 SINDy가 옳은 방향으로 빠르게 수렴합니다.
+
+## 데이터를 어떻게 모았나?
+
+가만히 호버링만 해서는 다양한 동역학을 관측할 수 없습니다. 그래서 다음과 같이 합니다.
+
+1. **베이스라인 PID 제어기**로 사각형 궤적을 따라 비행
+2. 100초 동안 $\Delta t = 0.002\text{s}$ 간격 샘플링
+3. 다양한 자세/속도 영역의 데이터를 수집
+
+이 데이터를 SINDy에 넣어 **병진(translation)** 과 **회전(rotation)** 모델을 따로 식별합니다.
+
+## SINDy-MPC: 식별된 모델로 제어하기
+
+SINDy가 만든 모델 $\dot x = \hat f(x,u)$ 를 그대로 MPC에 꽂습니다.
+
+$$
+\min_{u_1,\dots,u_N}\; \sum_{i=1}^{N} \big[\, (r_i - y_i)^\top Q (r_i - y_i) + u_i^\top R\, u_i \,\big]
+$$
+
+**제약 조건**:
+
+- $\dot x = \hat f(x,u)$ — SINDy 모델
+- $u_{\min} \le u \le u_{\max}$ — 제어 입력 한계
+- $x_1 = x_{\text{init}}$ — 초기 상태
+- $\sqrt{(x_{\text{ob}}-x)^2 + (y_{\text{ob}}-y)^2 + (z_{\text{ob}}-z)^2} \ge D_{\min}$ — **충돌 회피**
+
+마지막 제약이 핵심입니다. **장애물과의 거리를 부등식 제약**으로 박아 넣어, MPC가 자연스럽게 회피 경로를 만들도록 합니다.
+
+```mermaid
+flowchart TB
+    subgraph MPC[" SINDy-MPC at each time step "]
+        direction TB
+        S1[Current state x_k]
+        S2[Reference r_k:k+N]
+        S3[Obstacle pose<br/>x_ob, y_ob, z_ob]
+        S1 --> O[Optimize over u_1,...,u_N]
+        S2 --> O
+        S3 --> O
+        O --> C1{Dynamics:<br/>ẋ = f̂ x,u}
+        O --> C2{Input limits}
+        O --> C3{Distance ≥ D_min}
+        C1 --> U[Apply u_1*]
+        C2 --> U
+        C3 --> U
+    end
+    U --> P[Multirotor]
+    P -->|new x| S1
+```
+
+## 결과: 얼마나 잘 식별했나?
+
+### 병진 모델
+
+| 항목 | 결과 |
+|---|---|
+| 추력 계수 오차 | 약 0.2% |
+| 중력 추정값 | 9.808 (참값 9.807) |
+| 공기역학 항 | 정확히 복원 |
+
+### 회전 모델
+
+| 항목 | 결과 |
+|---|---|
+| 제어 입력 항 | 매우 정확 |
+| Roll/Pitch 감쇠 | 약 3% 오차 |
+| Yaw 감쇠 | 약 33% 오차 |
+
+Yaw 쪽이 큰 이유는 단순합니다 — **사각형 궤적에는 yaw 변화가 거의 없어서** 데이터가 부족했기 때문입니다. 이는 데이터 수집 전략의 중요성을 잘 보여주는 부분이기도 합니다.
+
+### 폐루프 제어 성능
+
+- 페이로드 불확실성 + 미지 공기역학 환경에서도 **참조 궤적 추종** 성공
+- 장애물과 안전 거리를 유지하면서 **회피 기동** 수행
+
+## 이 논문의 기여를 정리하면
+
+1. **페이로드 + 공기역학 불확실성**을 동시에 다루는 의미 있는 멀티로터 모델 식별
+2. **SINDy + MPC를 멀티로터 충돌 회피에 결합한 최초의 시도**
+3. 사전 물리 지식을 라이브러리에 결합해 **데이터 효율 + 해석 가능성** 동시 확보
+
+## 개인적인 감상
+
+신경망 기반 시스템 식별이 대세인 요즘, **희소성과 해석 가능성**을 무기로 하는 SINDy의 부활을 보는 느낌입니다. 특히 안전 제약이 중요한 항공 분야에서는 "왜 이 모델이 이런 출력을 내는지"를 설명할 수 있다는 점이 큰 가치를 갖죠.
+
+다만 한계도 분명합니다.
+
+- 후보 라이브러리 설계가 결과를 크게 좌우 — 결국 사람의 도메인 지식이 필수
+- 데이터 분포에 민감 (yaw 케이스가 그 예)
+- 온라인 모델 업데이트 시 SINDy를 어떻게 빠르게 다시 풀 것인가도 과제
+
+후속 연구로 **실제 비행 실험**과 **온라인 적응형 SINDy**가 자연스럽게 나올 만한 그림입니다.
+
+## References
+
+- 원문 (IET CTA): <https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/cth2.70049>
+- arXiv 프리프린트: <https://arxiv.org/abs/2412.06388>
+- Brunton, S. L., Proctor, J. L., & Kutz, J. N. (2016). *Discovering governing equations from data by sparse identification of nonlinear dynamical systems*. PNAS.
+- Kaiser, E., Kutz, J. N., & Brunton, S. L. (2018). *Sparse identification of nonlinear dynamics for model predictive control in the low-data limit*. Proc. R. Soc. A.
+
+## Image attribution
+
+- Header: *UAV-Multirotor.svg* — Wikimedia Commons, **CC0**.
+- Pitch diagram: *Quadrotorpitch.svg* — Wikimedia Commons, **CC BY-SA 3.0**.
+
+---
+
+*잘못된 부분이 있다면 알려주세요. 가능하면 논문을 직접 읽어보시길 추천드립니다.*
