@@ -6,8 +6,8 @@ tags: [sindy, mpc, multirotor, system-identification, data-driven, collision-avo
 math: true
 mermaid: false
 image:
-  path: /assets/img/posts/sindy-mpc/paper/header_card.png
-  alt: Multirotor with payload — system schematic
+  path: /assets/img/posts/sindy-mpc/header_card_v2.png
+  alt: SINDy + MPC for multirotor collision avoidance — overview
 ---
 
 > **Paper**: Lee et al., *Sparse Identification of Nonlinear Dynamics‐Based Model Predictive Control for Multirotor Collision Avoidance*, **IET Control Theory & Applications**, 2025.
