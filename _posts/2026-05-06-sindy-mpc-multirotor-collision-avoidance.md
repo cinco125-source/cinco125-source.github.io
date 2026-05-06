@@ -6,8 +6,8 @@ tags: [sindy, mpc, multirotor, system-identification, data-driven, collision-avo
 math: true
 mermaid: false
 image:
-  path: /assets/img/posts/sindy-mpc/fig2_block_diagram.png
-  alt: SINDy-MPC architecture for multirotor collision avoidance
+  path: /assets/img/posts/sindy-mpc/fig0_hero.png
+  alt: SINDy + MPC for multirotor collision avoidance — overview
 ---
 
 > **Paper**: Lee et al., *Sparse Identification of Nonlinear Dynamics‐Based Model Predictive Control for Multirotor Collision Avoidance*, **IET Control Theory & Applications**, 2025.
@@ -117,7 +117,10 @@ $$
 - $x_1 = x_{\text{init}}$ — 초기 상태
 - $\sqrt{(x_{\text{ob}}-x)^2 + (y_{\text{ob}}-y)^2 + (z_{\text{ob}}-z)^2} \ge D_{\min}$ — **충돌 회피**
 
-마지막 제약이 핵심입니다. **장애물과의 거리를 부등식 제약**으로 박아 넣어, MPC가 자연스럽게 회피 경로를 만들도록 합니다. 본 글 상단의 헤더 그림(그림 2)은 이 전체 흐름 — 오프라인 식별 + 온라인 폐루프 — 을 한눈에 보여줍니다.
+마지막 제약이 핵심입니다. **장애물과의 거리를 부등식 제약**으로 박아 넣어, MPC가 자연스럽게 회피 경로를 만들도록 합니다.
+
+![SINDy-MPC architecture](/assets/img/posts/sindy-mpc/fig2_block_diagram.png){: w="900" }
+_그림 2. SINDy-MPC 전체 아키텍처. (위) 오프라인 단계에서는 베이스라인 PID로 모은 데이터에 L1 회귀를 적용해 모델 $\hat f$ 를 식별한다. (아래) 온라인 단계에서는 이 모델을 MPC에 그대로 넣고, 장애물 거리 제약과 함께 폐루프 제어를 수행한다._
 
 ## 결과: 얼마나 잘 식별했나?
 
@@ -138,7 +141,7 @@ $$
 ### 폐루프 제어 성능 (논문 Table IV)
 
 ![Quantitative results](/assets/img/posts/sindy-mpc/fig4_quantitative.png){: w="900" }
-_그림 3. (a) SINDy가 식별한 dominant 계수의 오차 — 모두 1% 미만. (b) 폐루프 위치 RMSE 비교 — SINDy-MPC가 모든 축에서 nominal-model MPC보다 작은 오차를 보였고, 특히 z축에서 36% 감소($0.628 \to 0.399$)._
+_그림 3. (a) SINDy가 식별한 dominant 계수의 오차 — 모두 1% 미만. (b) 폐루프 위치 RMSE 비교 — SINDy-MPC가 모든 축에서 nominal-model MPC보다 작은 오차를 보였고, 특히 z축에서 36% 감소 ($0.628 \to 0.399$)._
 
 | RMSE [m] | $x$ | $y$ | $z$ |
 |---|---:|---:|---:|

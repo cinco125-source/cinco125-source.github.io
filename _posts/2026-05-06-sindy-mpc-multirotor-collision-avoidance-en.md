@@ -6,8 +6,8 @@ tags: [sindy, mpc, multirotor, system-identification, data-driven, collision-avo
 math: true
 mermaid: false
 image:
-  path: /assets/img/posts/sindy-mpc/fig2_block_diagram.png
-  alt: SINDy-MPC architecture for multirotor collision avoidance
+  path: /assets/img/posts/sindy-mpc/fig0_hero.png
+  alt: SINDy + MPC for multirotor collision avoidance — overview
 ---
 
 > **Paper**: Lee et al., *Sparse Identification of Nonlinear Dynamics‐Based Model Predictive Control for Multirotor Collision Avoidance*, **IET Control Theory & Applications**, 2025.
@@ -117,7 +117,10 @@ subject to
 - $x_1 = x_{\text{init}}$ — initial state,
 - $\sqrt{(x_{\text{ob}}-x)^2 + (y_{\text{ob}}-y)^2 + (z_{\text{ob}}-z)^2} \ge D_{\min}$ — **collision avoidance**.
 
-The last constraint is what makes this work: a simple distance inequality forces the optimizer to bend the trajectory around obstacles. The header figure (Fig. 2) shows the full picture — offline identification feeding an online closed-loop MPC.
+The last constraint is what makes this work: a simple distance inequality forces the optimizer to bend the trajectory around obstacles.
+
+![SINDy-MPC architecture](/assets/img/posts/sindy-mpc/fig2_block_diagram.png){: w="900" }
+_Fig. 2. The full SINDy-MPC architecture. (Top) Offline, baseline-PID flight data feeds an L1-regularized regression that identifies $\hat f$. (Bottom) Online, that identified model goes straight into the MPC, which closes the loop while honoring the collision-avoidance constraint._
 
 ## Identification accuracy (Tables II–III)
 
