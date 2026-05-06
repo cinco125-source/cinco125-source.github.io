@@ -6,35 +6,22 @@ tags: [sindy, mpc, multirotor, system-identification, data-driven, collision-avo
 math: true
 mermaid: false
 image:
-  path: /assets/img/posts/sindy-mpc/fig0_hero.png
-  alt: SINDy + MPC for multirotor collision avoidance — overview
+  path: /assets/img/posts/sindy-mpc/paper/Fig1_pay_re.png
+  alt: Multirotor with payload — system schematic
 ---
 
 > **Paper**: Lee et al., *Sparse Identification of Nonlinear Dynamics‐Based Model Predictive Control for Multirotor Collision Avoidance*, **IET Control Theory & Applications**, 2025.
 > DOI: [10.1049/cth2.70049](https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/cth2.70049) · arXiv: [2412.06388](https://arxiv.org/abs/2412.06388)
 >
 > *English version available [here](/posts/sindy-mpc-multirotor-collision-avoidance-en/).*
+>
+> *본 글에 인용된 모든 그림은 위 논문(저자 본인 포함)에서 가져온 것입니다.*
 
 ## 들어가며
 
 드론(멀티로터)에 페이로드를 매달면 어떻게 될까요? 질량과 관성이 바뀌고, 공기역학적 외란까지 추가됩니다. 모델은 부정확해지고, 제어기는 갑자기 흔들리기 시작합니다. 이런 상황에서도 **궤적을 따라가면서 동시에 장애물을 피해야 한다면**, 어떻게 해야 할까요?
 
 오늘 소개할 논문은 이 문제를 **데이터 기반 시스템 식별 + 모델 예측 제어(MPC)** 로 푸는 흥미로운 접근을 보여줍니다. 핵심은 **SINDy(Sparse Identification of Nonlinear Dynamics)** 입니다.
-
-## 왜 SINDy인가?
-
-데이터로 모델을 학습하는 방법은 많습니다. 신경망(DNN), 가우시안 프로세스(GP) 등이 대표적이죠. 그런데 이 방법들은 모두 **블랙박스**입니다. 모델이 왜 그런 출력을 내는지, 물리적으로 어떤 의미인지 설명하기가 어렵습니다.
-
-**SINDy는 다릅니다.**
-
-- "시스템을 지배하는 방정식은 사실 몇 개의 항으로 충분히 표현된다"는 가정에서 출발합니다.
-- 후보 함수 라이브러리 $\Psi$ 에서 **희소(sparse) 계수**만 골라내어, 사람이 읽을 수 있는 ODE 형태의 모델을 만듭니다.
-- 적은 데이터로도 작동하고, 결과가 **물리적으로 해석 가능**합니다.
-
-이 점이 안전이 중요한 멀티로터 제어에서 큰 장점이 됩니다.
-
-![SINDy concept](/assets/img/posts/sindy-mpc/fig1_sindy_concept.png){: w="800" }
-_그림 1. SINDy의 희소 회귀 구조. 후보 함수 라이브러리 $\Psi(X,U)$ 에서 L1 정칙화로 거의 0인 항을 잘라내어, 진짜 의미 있는 항으로만 구성된 ODE를 얻는다._
 
 ## 시스템 모델: 페이로드를 단 멀티로터
 
@@ -50,6 +37,9 @@ $$
 \dot{\omega} = I_t^{-1}\left(\tau_t + \tau_a - \omega \times I_t \omega \right)
 $$
 
+![Multirotor with payload](/assets/img/posts/sindy-mpc/paper/Fig1_pay_re.png){: w="600" }
+_그림 1. 페이로드를 매단 멀티로터의 좌표계 정의. body frame $\{B\}$ 와 inertial frame $\{I\}$, 그리고 네 개의 로터 추력 $T_1$–$T_4$. 페이로드 박스가 추가되어 질량과 관성이 변한다. (출처: Lee et al., 2025, Fig. 1)_
+
 여기서 핵심은 **페이로드 때문에 질량/관성이 바뀐다**는 점입니다.
 
 - $m_t = m_m + m_p$
@@ -62,7 +52,22 @@ $$
 
 **문제는?** $m_p, I_p, K_F, K_M$ 모두 정확히 모릅니다. 그래서 **데이터로 알아내야** 합니다.
 
-## SINDy의 핵심 아이디어
+## 왜 SINDy인가?
+
+데이터로 모델을 학습하는 방법은 많습니다. 신경망(DNN), 가우시안 프로세스(GP) 등이 대표적이죠. 그런데 이 방법들은 모두 **블랙박스**입니다. 모델이 왜 그런 출력을 내는지, 물리적으로 어떤 의미인지 설명하기가 어렵습니다.
+
+**SINDy는 다릅니다.**
+
+- "시스템을 지배하는 방정식은 사실 몇 개의 항으로 충분히 표현된다"는 가정에서 출발합니다.
+- 후보 함수 라이브러리 $\Psi$ 에서 **희소(sparse) 계수**만 골라내어, 사람이 읽을 수 있는 ODE 형태의 모델을 만듭니다.
+- 적은 데이터로도 작동하고, 결과가 **물리적으로 해석 가능**합니다.
+
+이 점이 안전이 중요한 멀티로터 제어에서 큰 장점이 됩니다.
+
+![SINDy concept](/assets/img/posts/sindy-mpc/paper/SINDy.png){: w="900" }
+_그림 2. SINDy의 기본 아이디어. 시간에 따라 측정된 상태 시그널 $\dot x(t)$, $\dot y(t)$, $\dot z(t)$ 로부터 $\dot X = \Psi(X,U)\Sigma$ 의 회귀를 푼다. 라이브러리 $\Psi$ 는 후보 단항/곱셈 항(예: $1, xu, y, x^2u, \ldots, z^5$)으로 구성되며, 계수 행렬 $\Sigma$ 는 L1 정칙화에 의해 희소하게 만들어진다. (출처: Lee et al., 2025, Fig. 2)_
+
+## SINDy의 핵심 식
 
 상태 스냅샷 $X$ 와 그 미분 $\dot X$ 를 모은 뒤, 후보 함수 라이브러리 $\Psi(X,U)$ 로 회귀합니다.
 
@@ -94,13 +99,7 @@ $$
 
 ## 데이터를 어떻게 모았나?
 
-가만히 호버링만 해서는 다양한 동역학을 관측할 수 없습니다. 그래서 다음과 같이 합니다.
-
-1. **베이스라인 PID 제어기**로 사각형 궤적을 따라 비행
-2. 100초 동안 $\Delta t = 0.002\,\text{s}$ 간격 샘플링
-3. 다양한 자세/속도 영역의 데이터를 수집
-
-이 데이터를 SINDy에 넣어 **병진(translation)** 과 **회전(rotation)** 모델을 따로 식별합니다.
+가만히 호버링만 해서는 다양한 동역학을 관측할 수 없습니다. 그래서 **베이스라인 PID 제어기**로 사각형 궤적을 따라 100초간 비행하면서 $\Delta t = 0.002\,\text{s}$ 간격으로 데이터를 수집합니다. 이렇게 모은 데이터를 SINDy에 넣어 **병진(translation)** 과 **회전(rotation)** 모델을 따로 식별합니다.
 
 ## SINDy-MPC: 식별된 모델로 제어하기
 
@@ -119,12 +118,10 @@ $$
 
 마지막 제약이 핵심입니다. **장애물과의 거리를 부등식 제약**으로 박아 넣어, MPC가 자연스럽게 회피 경로를 만들도록 합니다.
 
-![SINDy-MPC architecture](/assets/img/posts/sindy-mpc/fig2_block_diagram.png){: w="900" }
-_그림 2. SINDy-MPC 전체 아키텍처. (위) 오프라인 단계에서는 베이스라인 PID로 모은 데이터에 L1 회귀를 적용해 모델 $\hat f$ 를 식별한다. (아래) 온라인 단계에서는 이 모델을 MPC에 그대로 넣고, 장애물 거리 제약과 함께 폐루프 제어를 수행한다._
+![SINDy-MPC architecture](/assets/img/posts/sindy-mpc/paper/SINDY-MPC.png){: w="950" }
+_그림 3. SINDy-MPC 전체 흐름. (좌) Offline stage — 베이스라인 비행으로 모은 $\dot X$, $X$, $U$ 데이터로 라이브러리 $\Psi(X,U)$ 와 sparse $\Sigma$ 를 식별한다. (우) Online stage — 식별된 모델을 MPC에 그대로 넣고, 참조 $r(t)$ 를 추종하면서 plant $\dot x = f(x,u)$ 와 폐루프를 형성한다. (출처: Lee et al., 2025, Fig. 3)_
 
-## 결과: 얼마나 잘 식별했나?
-
-### 식별 정확도 (논문 Table II–III)
+## 결과: 식별 정확도 (논문 Table II–III)
 
 논문은 병진/회전 모델 각각에 대해 dominant한 계수의 참값과 식별값을 제공합니다. 핵심 항만 추리면 다음과 같습니다.
 
@@ -138,23 +135,22 @@ _그림 2. SINDy-MPC 전체 아키텍처. (위) 오프라인 단계에서는 베
 
 거의 모든 항이 1% 미만의 오차로 회복됩니다. 다만 yaw 공기역학($-K_{M,r} r$)은 사각형 궤적에 yaw 변화가 거의 없어서 30% 이상의 오차를 보였는데, 이는 **데이터 수집 전략의 중요성**을 잘 보여주는 부분이기도 합니다.
 
-### 폐루프 제어 성능 (논문 Table IV)
+## 폐루프 제어 성능 (논문 Table IV)
 
-![Quantitative results](/assets/img/posts/sindy-mpc/fig4_quantitative.png){: w="900" }
-_그림 3. (a) SINDy가 식별한 dominant 계수의 오차 — 모두 1% 미만. (b) 폐루프 위치 RMSE 비교 — SINDy-MPC가 모든 축에서 nominal-model MPC보다 작은 오차를 보였고, 특히 z축에서 36% 감소 ($0.628 \to 0.399$)._
+페이로드/공기역학 효과를 모르는 nominal MPC와 SINDy-MPC를 같은 환경에서 비교한 결과:
 
 | RMSE [m] | $x$ | $y$ | $z$ |
 |---|---:|---:|---:|
 | **SINDy-MPC** | **0.813** | **0.381** | **0.399** |
 | Nominal-model MPC | 0.909 | 0.452 | 0.628 |
 
-수치만 봐도 효과가 명확합니다. 페이로드/공기역학 효과를 모르는 nominal MPC는 z축에서 특히 크게 흔들리고, SINDy-MPC는 같은 환경에서도 깔끔히 추종합니다.
+특히 z축에서 36% 개선($0.628 \to 0.399$)이 나타납니다.
 
-![Trajectory schematic](/assets/img/posts/sindy-mpc/fig3_trajectory.png){: w="700" }
-_그림 4. 위에서 본 궤적 추종 + 충돌 회피 모식도. 사각형 reference에 두 개의 장애물($D_{\min}$ keep-out)이 있을 때, SINDy-MPC(파랑)는 reference에 가깝게 따라가는 반면 nominal-model MPC(연빨강)는 모델 불일치로 드리프트가 발생한다._
+![Position tracking](/assets/img/posts/sindy-mpc/paper/pos.png){: w="700" }
+_그림 4. 3D 궤적 추종 결과. 사각형 reference (점선)에 두 개의 장애물이 있는 환경에서, SINDy-MPC가 reference에 더 가깝게 따라가며 장애물을 회피하는 모습. (출처: Lee et al., 2025, Fig. 8)_
 
-- 페이로드 불확실성 + 미지 공기역학 환경에서도 **참조 궤적 추종** 성공
-- 장애물과 안전 거리를 유지하면서 **회피 기동** 수행
+![Position error](/assets/img/posts/sindy-mpc/paper/pos_error.PNG){: w="800" }
+_그림 5. 위치 오차 시계열. 모든 축에서 SINDy-MPC(파랑)가 nominal-model MPC(빨강)보다 일관되게 작은 오차를 보인다. 특히 z축에서 차이가 두드러진다. (출처: Lee et al., 2025, Fig. 9)_
 
 ## 이 논문의 기여를 정리하면
 
@@ -183,7 +179,7 @@ _그림 4. 위에서 본 궤적 추종 + 충돌 회피 모식도. 사각형 refe
 
 ## 그림 출처
 
-본 글의 모든 그림은 저자가 논문 내용을 바탕으로 직접 그린 모식도입니다. 논문의 실제 figure는 원문을 참고하세요.
+본 글에 인용된 그림은 모두 Lee et al. (2025)의 figure를 그대로 가져온 것입니다 (저자 본인 포함). 각 그림 캡션에 원문에서의 figure 번호를 명시했습니다.
 
 ---
 
