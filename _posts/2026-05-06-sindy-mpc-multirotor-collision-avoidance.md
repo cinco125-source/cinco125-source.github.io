@@ -4,14 +4,16 @@ date: 2026-05-06 14:00:00 +0900
 categories: [Paper Notes, Control]
 tags: [sindy, mpc, multirotor, system-identification, data-driven, collision-avoidance]
 math: true
-mermaid: true
+mermaid: false
 image:
-  path: https://upload.wikimedia.org/wikipedia/commons/0/02/UAV-Multirotor.svg
-  alt: Multirotor UAV schematic (Wikimedia Commons, CC0)
+  path: /assets/img/posts/sindy-mpc/fig2_block_diagram.png
+  alt: SINDy-MPC architecture for multirotor collision avoidance
 ---
 
 > **Paper**: Lee et al., *Sparse Identification of Nonlinear Dynamics‐Based Model Predictive Control for Multirotor Collision Avoidance*, **IET Control Theory & Applications**, 2025.
 > DOI: [10.1049/cth2.70049](https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/cth2.70049) · arXiv: [2412.06388](https://arxiv.org/abs/2412.06388)
+>
+> *English version available [here](/posts/sindy-mpc-multirotor-collision-avoidance-en/).*
 
 ## 들어가며
 
@@ -31,18 +33,8 @@ image:
 
 이 점이 안전이 중요한 멀티로터 제어에서 큰 장점이 됩니다.
 
-## 전체 파이프라인 한눈에 보기
-
-```mermaid
-flowchart LR
-    A[Baseline PID<br/>controller] -->|sample trajectories| B[State + input<br/>data X, U, Ẋ]
-    B --> C[Library Ψ X,U<br/>physics priors + polynomials]
-    C --> D[Sparse regression<br/>L1 reg]
-    D --> E[Identified model<br/>ẋ = f̂ x,u]
-    E --> F[SINDy-MPC<br/>tracking + collision avoidance]
-    F --> G[Multirotor closed-loop]
-    G -.->|new data| B
-```
+![SINDy concept](/assets/img/posts/sindy-mpc/fig1_sindy_concept.png){: w="800" }
+_그림 1. SINDy의 희소 회귀 구조. 후보 함수 라이브러리 $\Psi(X,U)$ 에서 L1 정칙화로 거의 0인 항을 잘라내어, 진짜 의미 있는 항으로만 구성된 ODE를 얻는다._
 
 ## 시스템 모델: 페이로드를 단 멀티로터
 
@@ -70,9 +62,6 @@ $$
 
 **문제는?** $m_p, I_p, K_F, K_M$ 모두 정확히 모릅니다. 그래서 **데이터로 알아내야** 합니다.
 
-![Quadrotor pitch axis](https://upload.wikimedia.org/wikipedia/commons/2/22/Quadrotorpitch.svg){: width="320" }
-_Quadrotor pitch 동작 모식도 (Wikimedia Commons, CC BY-SA 3.0)_
-
 ## SINDy의 핵심 아이디어
 
 상태 스냅샷 $X$ 와 그 미분 $\dot X$ 를 모은 뒤, 후보 함수 라이브러리 $\Psi(X,U)$ 로 회귀합니다.
@@ -98,7 +87,7 @@ $$
 $$
 
 $$
-\Psi_{\text{ro}} = \big[\,\Psi_{\text{prior}}(\text{control input, rotational coupling}) \;\big|\; \Psi_{\text{poly}}(\text{angular-rate polynomials})\,\big]
+\Psi_{\text{ro}} = \big[\,\Psi_{\text{prior}}(\text{control, rotational coupling}) \;\big|\; \Psi_{\text{poly}}(\text{angular-rate polynomials})\,\big]
 $$
 
 이렇게 하면 데이터가 적어도 SINDy가 옳은 방향으로 빠르게 수렴합니다.
@@ -108,7 +97,7 @@ $$
 가만히 호버링만 해서는 다양한 동역학을 관측할 수 없습니다. 그래서 다음과 같이 합니다.
 
 1. **베이스라인 PID 제어기**로 사각형 궤적을 따라 비행
-2. 100초 동안 $\Delta t = 0.002\text{s}$ 간격 샘플링
+2. 100초 동안 $\Delta t = 0.002\,\text{s}$ 간격 샘플링
 3. 다양한 자세/속도 영역의 데이터를 수집
 
 이 데이터를 SINDy에 넣어 **병진(translation)** 과 **회전(rotation)** 모델을 따로 식별합니다.
@@ -128,28 +117,7 @@ $$
 - $x_1 = x_{\text{init}}$ — 초기 상태
 - $\sqrt{(x_{\text{ob}}-x)^2 + (y_{\text{ob}}-y)^2 + (z_{\text{ob}}-z)^2} \ge D_{\min}$ — **충돌 회피**
 
-마지막 제약이 핵심입니다. **장애물과의 거리를 부등식 제약**으로 박아 넣어, MPC가 자연스럽게 회피 경로를 만들도록 합니다.
-
-```mermaid
-flowchart TB
-    subgraph MPC[" SINDy-MPC at each time step "]
-        direction TB
-        S1[Current state x_k]
-        S2[Reference r_k:k+N]
-        S3[Obstacle pose<br/>x_ob, y_ob, z_ob]
-        S1 --> O[Optimize over u_1,...,u_N]
-        S2 --> O
-        S3 --> O
-        O --> C1{Dynamics:<br/>ẋ = f̂ x,u}
-        O --> C2{Input limits}
-        O --> C3{Distance ≥ D_min}
-        C1 --> U[Apply u_1*]
-        C2 --> U
-        C3 --> U
-    end
-    U --> P[Multirotor]
-    P -->|new x| S1
-```
+마지막 제약이 핵심입니다. **장애물과의 거리를 부등식 제약**으로 박아 넣어, MPC가 자연스럽게 회피 경로를 만들도록 합니다. 본 글 상단의 헤더 그림(그림 2)은 이 전체 흐름 — 오프라인 식별 + 온라인 폐루프 — 을 한눈에 보여줍니다.
 
 ## 결과: 얼마나 잘 식별했나?
 
@@ -172,6 +140,9 @@ flowchart TB
 Yaw 쪽이 큰 이유는 단순합니다 — **사각형 궤적에는 yaw 변화가 거의 없어서** 데이터가 부족했기 때문입니다. 이는 데이터 수집 전략의 중요성을 잘 보여주는 부분이기도 합니다.
 
 ### 폐루프 제어 성능
+
+![Trajectory schematic](/assets/img/posts/sindy-mpc/fig3_trajectory.png){: w="700" }
+_그림 3. 위에서 본 궤적 추종 + 충돌 회피 모식도. 공칭 모델만으로는 페이로드/공기역학 영향으로 궤적이 흔들리지만(연한 빨강), SINDy-MPC는 거리 제약을 만족시키며 안전 거리를 두고 회피한다(파랑)._
 
 - 페이로드 불확실성 + 미지 공기역학 환경에서도 **참조 궤적 추종** 성공
 - 장애물과 안전 거리를 유지하면서 **회피 기동** 수행
@@ -201,10 +172,9 @@ Yaw 쪽이 큰 이유는 단순합니다 — **사각형 궤적에는 yaw 변화
 - Brunton, S. L., Proctor, J. L., & Kutz, J. N. (2016). *Discovering governing equations from data by sparse identification of nonlinear dynamical systems*. PNAS.
 - Kaiser, E., Kutz, J. N., & Brunton, S. L. (2018). *Sparse identification of nonlinear dynamics for model predictive control in the low-data limit*. Proc. R. Soc. A.
 
-## Image attribution
+## 그림 출처
 
-- Header: *UAV-Multirotor.svg* — Wikimedia Commons, **CC0**.
-- Pitch diagram: *Quadrotorpitch.svg* — Wikimedia Commons, **CC BY-SA 3.0**.
+본 글의 모든 그림은 저자가 논문 내용을 바탕으로 직접 그린 모식도입니다. 논문의 실제 figure는 원문을 참고하세요.
 
 ---
 
