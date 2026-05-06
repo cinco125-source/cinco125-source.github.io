@@ -6,7 +6,7 @@ tags: [sindy, mpc, multirotor, system-identification, data-driven, collision-avo
 math: true
 mermaid: false
 image:
-  path: /assets/img/posts/sindy-mpc/paper/Fig1_pay_re.png
+  path: /assets/img/posts/sindy-mpc/paper/header_card.png
   alt: Multirotor with payload — system schematic
 ---
 
@@ -37,7 +37,7 @@ $$
 \dot{\omega} = I_t^{-1}\left(\tau_t + \tau_a - \omega \times I_t \omega \right)
 $$
 
-![Multirotor with payload](/assets/img/posts/sindy-mpc/paper/Fig1_pay_re.png){: w="600" }
+![Multirotor with payload](/assets/img/posts/sindy-mpc/paper/Fig1_pay_re.png){: w="780" }
 _Fig. 1. Frame definitions for the payload-carrying multirotor: body frame $\{B\}$, inertial frame $\{I\}$, and rotor thrusts $T_1$–$T_4$. The payload changes both the mass and the inertia of the vehicle. (Source: Lee et al., 2025, Fig. 1)_
 
 The catch is that the **payload changes mass and inertia**:
@@ -64,7 +64,7 @@ There is no shortage of ways to learn dynamics from data — neural networks, Ga
 
 For safety-critical aerospace applications, the **interpretability** of SINDy is a real asset.
 
-![SINDy concept](/assets/img/posts/sindy-mpc/paper/SINDy.png){: w="900" }
+![SINDy concept](/assets/img/posts/sindy-mpc/paper/SINDy.png){: w="780" }
 _Fig. 2. The SINDy regression in pictures. From measured time signals $\dot x(t), \dot y(t), \dot z(t)$ we form $\dot X = \Psi(X,U)\Sigma$, where the library $\Psi$ holds candidate monomials and cross-products (e.g.\ $1, xu, y, x^2u, \ldots, z^5$) and the coefficient matrix $\Sigma$ is driven sparse by L1 regularization. (Source: Lee et al., 2025, Fig. 2)_
 
 ## SINDy in one equation
@@ -118,7 +118,7 @@ subject to
 
 The last constraint is what makes this work: a simple distance inequality forces the optimizer to bend the trajectory around obstacles.
 
-![SINDy-MPC architecture](/assets/img/posts/sindy-mpc/paper/SINDY-MPC.png){: w="950" }
+![SINDy-MPC architecture](/assets/img/posts/sindy-mpc/paper/SINDY-MPC.png){: w="780" }
 _Fig. 3. The full SINDy-MPC pipeline. (Left) Offline stage — baseline-flight data $\dot X, X, U$ feeds a sparse regression that yields the library $\Psi(X,U)$ and a sparse $\Sigma$. (Right) Online stage — the identified model is plugged into an MPC that tracks $r(t)$ while closing the loop with the plant $\dot x = f(x,u)$. (Source: Lee et al., 2025, Fig. 3)_
 
 ## Identification accuracy (Tables II–III)
@@ -146,10 +146,10 @@ A direct comparison between the SINDy-MPC and the nominal-model MPC under the sa
 
 The largest improvement is on the z axis (36% reduction, $0.628 \to 0.399$), which is exactly where unmodeled mass and aerodynamic drag hurt the most.
 
-![Position tracking](/assets/img/posts/sindy-mpc/paper/pos.png){: w="700" }
+![Position tracking](/assets/img/posts/sindy-mpc/paper/pos.png){: w="780" }
 _Fig. 4. 3D trajectory tracking. With a rectangular reference and two obstacles, SINDy-MPC follows the reference more closely while still keeping the safety distance from each obstacle. (Source: Lee et al., 2025, Fig. 8)_
 
-![Position error](/assets/img/posts/sindy-mpc/paper/pos_error.PNG){: w="800" }
+![Position error](/assets/img/posts/sindy-mpc/paper/pos_error.PNG){: w="780" }
 _Fig. 5. Position-tracking error time histories. SINDy-MPC (blue) shows consistently smaller error than nominal-model MPC (red) on every axis, with the gap most pronounced on the z axis. (Source: Lee et al., 2025, Fig. 9)_
 
 ## Contributions in one paragraph
