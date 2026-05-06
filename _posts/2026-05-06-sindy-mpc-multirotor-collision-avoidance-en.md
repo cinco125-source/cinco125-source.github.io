@@ -119,30 +119,34 @@ subject to
 
 The last constraint is what makes this work: a simple distance inequality forces the optimizer to bend the trajectory around obstacles. The header figure (Fig. 2) shows the full picture — offline identification feeding an online closed-loop MPC.
 
-## Identification accuracy
+## Identification accuracy (Tables II–III)
 
-### Translational model
+The paper reports true vs identified coefficients for the dominant terms of both translational and rotational dynamics. The key entries:
 
-| Quantity | Result |
-|---|---|
-| Thrust coefficient error | ~0.2% |
-| Estimated gravity | 9.808 (true 9.807) |
-| Aerodynamic terms | recovered accurately |
+| Term | True $\Sigma$ | Identified $\hat\Sigma$ | Error |
+|---|---:|---:|---:|
+| $R_{(1,3)} F_B \to \dot{x}$ | 0.7692 | 0.7707 | 0.20% |
+| $R_{(2,3)} F_B \to \dot{y}$ | 0.7692 | 0.7704 | 0.16% |
+| $L \to \dot{p}$ | 32.258 | 32.248 | 0.03% |
+| $M \to \dot{q}$ | 26.316 | 26.316 | 0.00% |
+| $N \to \dot{r}$ | 15.873 | 15.879 | 0.04% |
 
-### Rotational model
+Every dominant coefficient is recovered to within 1%. The exception is yaw aerodynamic damping ($-K_{M,r} r$), where the rectangular reference simply does not excite yaw enough to identify the term reliably (>30% error). **Excitation is part of the design problem.**
 
-| Quantity | Result |
-|---|---|
-| Control-input terms | very accurate |
-| Roll/pitch damping | ~3% error |
-| Yaw damping | ~33% error |
+## Closed-loop performance (Table IV)
 
-Yaw damping is the weakest link — and the reason is illuminating. The rectangular reference trajectory does not excite yaw motion, so SINDy lacks the data needed to identify the corresponding term. **Data quality is part of the design problem.**
+![Quantitative results](/assets/img/posts/sindy-mpc/fig4_quantitative.png){: w="900" }
+_Fig. 3. (a) Identification error for the dominant coefficients — all under 1%. (b) Closed-loop position RMSE — SINDy-MPC outperforms nominal-model MPC on every axis, with the largest improvement on the z axis (36% reduction, $0.628 \to 0.399$)._
 
-### Closed-loop performance
+| RMSE [m] | $x$ | $y$ | $z$ |
+|---|---:|---:|---:|
+| **SINDy-MPC** | **0.813** | **0.381** | **0.399** |
+| Nominal-model MPC | 0.909 | 0.452 | 0.628 |
+
+The numbers tell a clear story. The nominal-model MPC, unaware of the payload and aerodynamic effects, accumulates large altitude error, while the SINDy-identified model brings the closed-loop tracking back in line.
 
 ![Trajectory schematic](/assets/img/posts/sindy-mpc/fig3_trajectory.png){: w="700" }
-_Fig. 3. Top-down view of trajectory tracking with collision avoidance. A controller built on the nominal model drifts under payload uncertainty and aerodynamic effects (light red), whereas SINDy-MPC respects the distance constraint and bends safely around the obstacles (blue)._
+_Fig. 4. Top-down view of trajectory tracking with collision avoidance. With a rectangular reference and two $D_{\min}$ keep-out zones, SINDy-MPC (blue) stays close to the reference, while the nominal-model MPC (light red) drifts due to model mismatch._
 
 - The vehicle tracks the reference under payload uncertainty and unmodeled aerodynamics.
 - The MPC keeps a safe distance from each obstacle while completing the trajectory.
